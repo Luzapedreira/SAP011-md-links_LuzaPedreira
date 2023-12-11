@@ -1,23 +1,47 @@
-const { match } = require('assert');
 const fs = require('fs');
 
-function mdLinks(filePath) {
+function mdLinks(caminhoDoArquivo, options) {
   return new Promise((resolve, reject) => {
-    fs.readFile(filePath, 'utf-8', (err, data) => {
-      if (err) reject(err);
-      const pattern = /\[([^\]]+)\[\((https?[^)]+)\)/g;
-      const matches = [...data.matchAll(pattern)];
-      const links = matches.map(match => {
-        return {
+    fs.readFile(caminhoDoArquivo, 'utf8', (err, data) => {
+      if (err) reject(err); 
+      const regex = /\[([^\]]+)\]\((https?[^)]+)\)/g;
+      let match;
+      const links = [];
+      while ((match = regex.exec(data)) !== null) { 
+        links.push({
           href: match[2],
           text: match[1],
-          file: filePath
-        }
-      })
+          file: caminhoDoArquivo,
+
+        });
+      }
+
+      if (options.validate === false) {
+        resolve(links); 
+      } else {
+        const linksValidados = links.map((link) => fetch(link.href)
+          .then((response) => { 
+            const linkValidado = { ...link };
+            linkValidado.status = response.status;
+            if (response.status >= 200 && response.status <= 299) { 
+              linkValidado.ok = 'ok';
+            } else {
+              linkValidado.ok = 'fail';
+            }
+            return linkValidado;
+          })
+          .catch(() => {
+            const linkValidado = { ...link };
+            linkValidado.ok = 'fail';
+            linkValidado.status = 'ENOTFOUND';
+            return linkValidado;
+          }));
+        resolve(Promise.all(linksValidados));
+      }
     });
   });
 }
 
-mdLinks('./README.md').then((result) => console.log(result));
+// mdLinks('./oneFile.md', { validate: true }).then((result) => console.log(result));
 
 module.exports = { mdLinks };
